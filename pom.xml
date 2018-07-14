@@ -11,6 +11,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <xchange.version>4.3.9-SNAPSHOT</xchange.version>
+        <ta4j.version>0.12-SNAPSHOT</ta4j.version>
     </properties>
 
     <repositories>
@@ -41,6 +42,16 @@
             <groupId>org.knowm.xchange</groupId>
             <artifactId>xchange-bittrex</artifactId>
             <version>${xchange.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.ta4j</groupId>
+            <artifactId>ta4j-core</artifactId>
+            <version>${ta4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jfree</groupId>
+            <artifactId>jfreechart</artifactId>
+            <version>1.0.17</version>
         </dependency>
     </dependencies>
 
