@@ -16,10 +16,9 @@ import org.ta4j.core.indicators.EMAIndicator;
 import org.ta4j.core.indicators.RSIIndicator;
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator;
 import org.ta4j.core.indicators.helpers.GainIndicator;
+import org.ta4j.core.indicators.helpers.PreviousValueIndicator;
 import org.ta4j.core.num.BigDecimalNum;
-import org.ta4j.core.trading.rules.BooleanRule;
-import org.ta4j.core.trading.rules.CrossedUpIndicatorRule;
-import org.ta4j.core.trading.rules.UnderIndicatorRule;
+import org.ta4j.core.trading.rules.*;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -98,25 +97,31 @@ public class XChangeTest {
         if (series == null) {
             throw new IllegalArgumentException("Series cannot be null");
         }
-
         ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
-        GainIndicator gainIndicator = new GainIndicator(closePrice);
-
         EMAIndicator shortEma = new EMAIndicator(closePrice, 7);
         EMAIndicator longEma = new EMAIndicator(closePrice, 28);
         RSIIndicator rsiIndicator = new RSIIndicator(closePrice, 7);
-
+        PreviousValueIndicator rsiIndicator1 = new PreviousValueIndicator(rsiIndicator, 1);
+        PreviousValueIndicator rsiIndicator2 = new PreviousValueIndicator(rsiIndicator, 2);
+        PreviousValueIndicator rsiIndicator3 = new PreviousValueIndicator(rsiIndicator, 3);
+        PreviousValueIndicator rsiIndicator4 = new PreviousValueIndicator(rsiIndicator, 4);
 
         // Entry rule
         Rule entryRule = new CrossedUpIndicatorRule(shortEma, longEma)
-                .and(new CrossedUpIndicatorRule(rsiIndicator, BigDecimalNum.valueOf(60)))
-                .and(new BooleanRule(gainIndicator);
+                .and(new OverIndicatorRule(rsiIndicator, BigDecimalNum.valueOf(60)))
+                .and(new UnderIndicatorRule(rsiIndicator1, BigDecimalNum.valueOf(40))
+                        .or(new UnderIndicatorRule(rsiIndicator2, BigDecimalNum.valueOf(40))
+                                .or(new UnderIndicatorRule(rsiIndicator3, BigDecimalNum.valueOf(40))
+                                        .or(new UnderIndicatorRule(rsiIndicator4, BigDecimalNum.valueOf(40))))))
+                .and(new UnderIndicatorRule(rsiIndicator, rsiIndicator1)
+                        .and(new UnderIndicatorRule(rsiIndicator, rsiIndicator2)
+                                .and(new UnderIndicatorRule(rsiIndicator1, rsiIndicator2)
+                                        .and(new UnderIndicatorRule(rsiIndicator2, rsiIndicator3)))));
 
 
         // Exit rule
-        Rule exitRule = new UnderIndicatorRule(shortEma, longEma) // Trend
-                .and(new CrossedUpIndicatorRule(stochasticOscillK, new BigDecimal("80"))) // Signal 1
-                .and(new UnderIndicatorRule(macd, emaMacd)); // Signal 2
+        Rule exitRule = new StopLossRule(closePrice, BigDecimalNum.valueOf("2"))
+                .or(new StopGainRule(closePrice, BigDecimalNum.valueOf("1")));
 
         return new BaseStrategy(entryRule, exitRule);
     }
