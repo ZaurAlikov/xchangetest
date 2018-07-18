@@ -1,4 +1,3 @@
-import ch.qos.logback.classic.LoggerContext;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
@@ -18,8 +17,6 @@ import org.knowm.xchange.binance.dto.marketdata.BinanceKline;
 import org.knowm.xchange.binance.dto.marketdata.KlineInterval;
 import org.knowm.xchange.binance.service.BinanceMarketDataService;
 import org.knowm.xchange.currency.CurrencyPair;
-import org.knowm.xchange.service.marketdata.MarketDataService;
-import org.slf4j.LoggerFactory;
 import org.ta4j.core.*;
 import org.ta4j.core.analysis.criteria.TotalProfitCriterion;
 import org.ta4j.core.indicators.EMAIndicator;
@@ -31,17 +28,15 @@ import org.ta4j.core.num.Num;
 import org.ta4j.core.trading.rules.*;
 
 import java.awt.*;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.List;
 
 public class XChangeTest {
 
-    private static CurrencyPair pair = CurrencyPair.LTC_USDT;
+    private static CurrencyPair pair = CurrencyPair.BTC_USDT;
     private static KlineInterval interval = KlineInterval.m15;
     private static int limit = 500;
 
@@ -51,43 +46,75 @@ public class XChangeTest {
         binanceSpecification.setApiKey("");
         binanceSpecification.setSecretKey("");
         Exchange binance = ExchangeFactory.INSTANCE.createExchange(binanceSpecification);
-//        Exchange bittrex = ExchangeFactory.INSTANCE.createExchange(BittrexExchange.class.getName());
-//        MarketDataService dataServiceBinance = binance.getMarketDataService();
-//        MarketDataService dataServiceBittrex = bittrex.getMarketDataService();
-        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
-        loggerContext.stop();
-
+////        Exchange bittrex = ExchangeFactory.INSTANCE.createExchange(BittrexExchange.class.getName());
+////        MarketDataService dataServiceBinance = binance.getMarketDataService();
+////        MarketDataService dataServiceBittrex = bittrex.getMarketDataService();
+//        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+//        loggerContext.stop();
+//
         String exchangeName = binance.getExchangeSpecification().getExchangeName();
-        BinanceMarketDataService marketDataService = (BinanceMarketDataService) binance.getMarketDataService();
-        List<BinanceKline> klines = getBinanceKlines(marketDataService, 30L);
-        TimeSeries series = new BaseTimeSeries.SeriesBuilder().withName(exchangeName + "TS").withNumTypeOf(BigDecimalNum::valueOf).build();
-        for (BinanceKline kline : klines) {
-            ZonedDateTime dateTime = ZonedDateTime.ofInstant(Instant.ofEpochMilli(kline.getCloseTime()), ZoneId.systemDefault());
-            series.addBar(dateTime, BigDecimalNum.valueOf(kline.getOpenPrice()),
-                    BigDecimalNum.valueOf(kline.getHighPrice()), BigDecimalNum.valueOf(kline.getLowPrice()),
-                    BigDecimalNum.valueOf(kline.getClosePrice()), BigDecimalNum.valueOf(kline.getVolume()));
-        }
+//        BinanceMarketDataService marketDataService = (BinanceMarketDataService) binance.getMarketDataService();
+//        List<BinanceKline> klines = getBinanceKlines(marketDataService, 360L);
+//        writeCsv(klines, "btc_usdt_15m_bars.csv");
+//        TimeSeries series = new BaseTimeSeries.SeriesBuilder().withName(exchangeName + "TS").withNumTypeOf(BigDecimalNum::valueOf).build();
+//        for (BinanceKline kline : klines) {
+//            ZonedDateTime dateTime = ZonedDateTime.ofInstant(Instant.ofEpochMilli(kline.getCloseTime()), ZoneId.systemDefault());
+//            series.addBar(dateTime, BigDecimalNum.valueOf(kline.getOpenPrice()),
+//                    BigDecimalNum.valueOf(kline.getHighPrice()), BigDecimalNum.valueOf(kline.getLowPrice()),
+//                    BigDecimalNum.valueOf(kline.getClosePrice()), BigDecimalNum.valueOf(kline.getVolume()));
+//        }
 
-        Strategy strategy = buildStrategy(series);
+
+        TimeSeries series = CsvBarsLoader.loadBtcUsdtSeries();
+        Strategy strategy = Strategies.getRsiEmaStrategy(series, 40, 60, 7, 7, 28);
+
 //        TimeSeriesCollection dataSet = new TimeSeriesCollection();
 //        String title = exchangeName + " " + pair.toString();
 //        dataSet.addSeries(buildChartTimeSeries(series, new ClosePriceIndicator(series), title));
 //        createChart(dataSet, series, strategy, title);
 
-
         TimeSeriesManager seriesManager = new TimeSeriesManager(series);
         TradingRecord tradingRecord = seriesManager.run(strategy);
+        analytics(tradingRecord, series);
+    }
+
+    private static void analytics(TradingRecord tradingRecord, TimeSeries series) {
         System.out.println("Number of trades for the strategy: " + tradingRecord.getTradeCount());
         System.out.println("Total profit for the strategy: " + new TotalProfitCriterion().calculate(series, tradingRecord));
+        List<Trade> trades = tradingRecord.getTrades();
+        int profitCount = 0;
+        int lossCount = 0;
+        Num sum = BigDecimalNum.valueOf("15");
+        for (Trade trade : trades){
+            Num priceEntry = trade.getEntry().getPrice();
+            Num priceExit = trade.getExit().getPrice();
+            if (priceExit.isGreaterThan(priceEntry)) {
+                profitCount++;
+//                sum = sum.minus(sum.multipliedBy(BigDecimalNum.valueOf("0.001")));
+                sum = sum.plus(sum.multipliedBy(BigDecimalNum.valueOf("0.009")));
+            } else {
+                lossCount++;
+//                sum = sum.minus(sum.multipliedBy(BigDecimalNum.valueOf("0.001")));
+                sum = sum.minus(sum.multipliedBy(BigDecimalNum.valueOf("0.021")));
+            }
+        }
+        System.out.println("Profit trade: " + profitCount + " loss trade: " + lossCount + " ratio: " + (double)lossCount/profitCount);
+        System.out.println(sum.toString());
+    }
 
-//        while (true) {
-//            BigDecimal lastBinance = dataServiceBinance.getTicker(CurrencyPair.NEO_USDT).getLast();
-//            BigDecimal lastBittrex = dataServiceBittrex.getTicker(CurrencyPair.NEO_USDT).getLast();
-//            System.out.println(lastBinance + " " + lastBittrex);
-//            System.out.println("Разница между ценами BTCUSDT на Binance и Bittrex - " +
-//                    Math.abs(lastBinance.subtract(lastBittrex).doubleValue()) + " USDT");
-//            Thread.sleep(1000);
-//        }
+    private static void writeCsv(List<BinanceKline> klines, String fileName) {
+        String line;
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+        try(FileWriter writer = new FileWriter(fileName, true))
+        {
+            for (BinanceKline kline : klines){
+                line = dateFormat.format(new Date(kline.getCloseTime())) + "," + kline.getOpenPrice() + "," + kline.getHighPrice() + "," + kline.getLowPrice()  + "," + kline.getClosePrice()  + "," + kline.getVolume() + "\r\n";
+                writer.write(line);
+            }
+            writer.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private static List<BinanceKline> getBinanceKlines(BinanceMarketDataService dataService, long days) throws IOException {
@@ -97,7 +124,7 @@ public class XChangeTest {
         long endDate = startDate + fiveDaysInMs;
         List<BinanceKline> klines = new ArrayList<>();
         int countIteration = (int) Math.ceil(daysInMs / fiveDaysInMs);
-        for (int i = 0; i < countIteration; i++){
+        for (int i = 0; i < countIteration; i++) {
             klines.addAll(dataService.klines(pair, interval, limit, startDate, endDate));
             startDate = endDate;
             endDate = startDate + fiveDaysInMs;
@@ -106,37 +133,6 @@ public class XChangeTest {
             }
         }
         return klines;
-    }
-
-    public static Strategy buildStrategy(TimeSeries series) {
-        if (series == null) {
-            throw new IllegalArgumentException("Series cannot be null");
-        }
-        ClosePriceIndicator closePrice = new ClosePriceIndicator(series);
-        EMAIndicator shortEma = new EMAIndicator(closePrice, 7);
-        EMAIndicator longEma = new EMAIndicator(closePrice, 28);
-        RSIIndicator rsiIndicator = new RSIIndicator(closePrice, 7);
-        PreviousValueIndicator rsiIndicator1 = new PreviousValueIndicator(rsiIndicator, 1);
-        PreviousValueIndicator rsiIndicator2 = new PreviousValueIndicator(rsiIndicator, 2);
-        PreviousValueIndicator rsiIndicator3 = new PreviousValueIndicator(rsiIndicator, 3);
-        PreviousValueIndicator rsiIndicator4 = new PreviousValueIndicator(rsiIndicator, 4);
-
-        // Entry rule
-        Rule entryRule = new CrossedUpIndicatorRule(shortEma, longEma)
-                .and(new OverIndicatorRule(rsiIndicator, BigDecimalNum.valueOf(60)))
-                .and(new UnderIndicatorRule(rsiIndicator1, BigDecimalNum.valueOf(40))
-                        .or(new UnderIndicatorRule(rsiIndicator2, BigDecimalNum.valueOf(40))
-                                .or(new UnderIndicatorRule(rsiIndicator3, BigDecimalNum.valueOf(40))
-                                        .or(new UnderIndicatorRule(rsiIndicator4, BigDecimalNum.valueOf(40))))))
-                .and(new UnderIndicatorRule(rsiIndicator, rsiIndicator1)
-                        .and(new UnderIndicatorRule(rsiIndicator, rsiIndicator2)
-                                .and(new UnderIndicatorRule(rsiIndicator1, rsiIndicator2)
-                                        .and(new UnderIndicatorRule(rsiIndicator2, rsiIndicator3)))));
-        // Exit rule
-        Rule exitRule = new StopLossRule(closePrice, BigDecimalNum.valueOf("2"))
-                .or(new StopGainRule(closePrice, BigDecimalNum.valueOf("1")));
-
-        return new BaseStrategy(entryRule, exitRule);
     }
 
     private static org.jfree.data.time.TimeSeries buildChartTimeSeries(TimeSeries barseries, Indicator<Num> indicator, String name) {
@@ -151,9 +147,11 @@ public class XChangeTest {
     private static void addBuySellSignals(TimeSeries series, Strategy strategy, XYPlot plot) {
         // Running the strategy
         TimeSeriesManager seriesManager = new TimeSeriesManager(series);
-        List<Trade> trades = seriesManager.run(strategy).getTrades();
+        TradingRecord tradingRecord = seriesManager.run(strategy);
+        analytics(tradingRecord, series);
+
         // Adding markers to plot
-        for (Trade trade : trades) {
+        for (Trade trade : tradingRecord.getTrades()) {
             // Buy signal
             double buySignalBarTime = new Minute(Date.from(series.getBar(trade.getEntry().getIndex()).getEndTime().toInstant())).getFirstMillisecond();
             Marker buyMarker = new ValueMarker(buySignalBarTime);
